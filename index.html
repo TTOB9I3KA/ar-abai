@@ -1,0 +1,507 @@
+<title>Ожившие портреты</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<style>
+/* Layout: full-screen camera; the poem card rises out of the scanned QR like a framed medallion over the page */
+:root{
+  --ink:#0b1222;        /* night ink, app ground */
+  --ink-2:#141d33;      /* card surface */
+  --line:#2a3655;       /* hairlines */
+  --text:#ece6d6;       /* paper-white text */
+  --muted:#8f97ad;      /* secondary text */
+  --gold:#d9a94e;       /* ornament gold, accent */
+  --gold-soft:rgba(217,169,78,.18);
+  --f-verse:"PT Serif",Georgia,"Times New Roman",serif;
+  --f-ui:"PT Sans","Segoe UI",Roboto,Arial,sans-serif;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--ink);color:var(--text);font-family:var(--f-ui);overflow:hidden;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  -webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* camera layer */
+#cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:var(--ink)}
+#camDim{position:fixed;inset:0;background:radial-gradient(ellipse at center,rgba(11,18,34,0) 40%,rgba(11,18,34,.7) 100%);pointer-events:none;transition:background .6s}
+body.open #camDim{background:rgba(11,18,34,.62);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+#lockSvg{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#lockPoly{fill:var(--gold-soft);stroke:var(--gold);stroke-width:3;opacity:0;transition:opacity .2s}
+#lockSvg.on #lockPoly{opacity:1}
+
+/* scanning viewfinder */
+#finder{position:fixed;left:50%;top:44%;width:min(62vw,260px);aspect-ratio:1;transform:translate(-50%,-50%);pointer-events:none}
+#finder i{position:absolute;width:34px;height:34px;border:3px solid var(--gold)}
+#finder i:nth-child(1){left:0;top:0;border-right:0;border-bottom:0;border-radius:10px 0 0 0}
+#finder i:nth-child(2){right:0;top:0;border-left:0;border-bottom:0;border-radius:0 10px 0 0}
+#finder i:nth-child(3){left:0;bottom:0;border-right:0;border-top:0;border-radius:0 0 0 10px}
+#finder i:nth-child(4){right:0;bottom:0;border-left:0;border-top:0;border-radius:0 0 10px 0}
+#finder b{position:absolute;left:8%;right:8%;height:2px;background:var(--gold);box-shadow:0 0 12px var(--gold);animation:sweep 2.2s ease-in-out infinite}
+@keyframes sweep{0%,100%{top:10%}50%{top:88%}}
+#scanHint{position:fixed;left:0;right:0;bottom:calc(28px + env(safe-area-inset-bottom,0px));text-align:center;font-size:15px;color:var(--text);text-shadow:0 1px 6px #000;padding-inline:24px}
+#scanHint small{display:block;color:var(--muted);font-size:13px;margin-top:4px}
+.topbar{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));display:flex;justify-content:space-between;align-items:center;gap:8px;z-index:5}
+.chip{background:rgba(11,18,34,.72);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;letter-spacing:.04em}
+
+/* start screen */
+#start{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:22px;padding:24px;text-align:center;
+  padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));
+  background:radial-gradient(circle at 50% 30%,#1b2748 0%,var(--ink) 70%)}
+#start .medal{width:150px;height:150px}
+#start h1{font-family:var(--f-verse);font-weight:700;font-size:clamp(30px,8vw,44px);line-height:1.05;margin:0;text-wrap:balance}
+#start h1 em{display:block;font-weight:400;font-size:.5em;color:var(--gold);letter-spacing:.14em;text-transform:uppercase;font-style:normal;margin-bottom:10px}
+#start p{margin:0;color:var(--muted);max-width:34ch;line-height:1.5;font-size:15px}
+.btn{border:0;border-radius:14px;padding:15px 26px;font-size:17px;font-weight:700;background:var(--gold);color:#1a1408;min-width:240px}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line);font-weight:400;font-size:15px;padding:12px 20px}
+#camErr{color:#f0b38a;font-size:14px;max-width:34ch;line-height:1.45}
+
+/* card */
+#card{position:fixed;z-index:10;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));
+  top:calc(12px + env(safe-area-inset-top,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));
+  max-width:520px;max-height:860px;margin:auto;display:flex;flex-direction:column;
+  background:var(--ink-2);border:1px solid var(--line);border-radius:22px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+#card.enter{animation:rise .75s cubic-bezier(.2,.9,.25,1.05) both}
+@keyframes rise{from{transform:translate(var(--fx,0),var(--fy,0)) scale(.12);opacity:0;border-radius:4px}60%{opacity:1}to{transform:none;opacity:1}}
+.cardHead{display:flex;align-items:center;gap:10px;padding:12px 14px 8px}
+.cardHead .ttl{flex:1;min-width:0}
+.cardHead .ttl b{display:block;font-family:var(--f-verse);font-size:17px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cardHead .ttl span{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex:none}
+.seg button{background:transparent;border:0;padding:7px 11px;font-size:13px;font-weight:700;letter-spacing:.05em;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--gold);color:#1a1408}
+.iconBtn{width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:transparent;display:grid;place-items:center;flex:none}
+.iconBtn svg{width:18px;height:18px}
+.ornament{height:12px;flex:none;color:var(--gold);opacity:.75}
+
+.stage{flex:1;min-height:0;display:flex;flex-direction:column}
+.portrait{flex:1.05;min-height:0;position:relative;display:grid;place-items:center;
+  background:radial-gradient(circle at 50% 55%,#24315a 0%,var(--ink-2) 72%)}
+.portrait svg{height:100%;max-height:250px;width:auto;max-width:100%;overflow:visible}
+.scene{flex:1;min-height:110px;position:relative;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.scene svg{position:absolute;inset:0;width:100%;height:100%}
+
+.subs{height:96px;flex:none;overflow:hidden;position:relative;
+  -webkit-mask-image:linear-gradient(transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(transparent,#000 22%,#000 78%,transparent)}
+.subs ol{list-style:none;margin:0;padding:0;transition:transform .55s cubic-bezier(.3,.7,.3,1)}
+.subs li{height:32px;line-height:32px;text-align:center;font-family:var(--f-verse);font-size:17px;color:var(--muted);opacity:.45;transition:color .4s,opacity .4s,transform .4s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-inline:12px}
+.subs li.cur{color:var(--text);opacity:1;font-size:19px;font-style:italic}
+.subs li.done{opacity:.6}
+.note{font-size:12px;color:var(--muted);text-align:center;padding:0 16px 6px;min-height:6px}
+.controls{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px 14px 14px;flex:none}
+.play{width:58px;height:58px;border-radius:50%;border:0;background:var(--gold);color:#1a1408;display:grid;place-items:center}
+.play svg{width:24px;height:24px}
+
+/* ===== Abai ===== */
+#abai .fig{transform-origin:120px 260px;animation:breathe 4.2s ease-in-out infinite}
+@keyframes breathe{50%{transform:scale(1.012,1.02)}}
+#abai .head{transform-origin:120px 175px;transition:transform .9s cubic-bezier(.4,.1,.3,1)}
+#abai .eyes{transform-box:fill-box;transform-origin:center;animation:blink 5.3s infinite}
+@keyframes blink{0%,46%,50%,100%{transform:scaleY(1)}48%{transform:scaleY(.1)}}
+#abai .arm{transform-origin:206px 286px;transform:rotate(28deg);transition:transform .9s cubic-bezier(.4,.1,.25,1.15)}
+#abai .stache{transform-box:fill-box;transform-origin:center top}
+#abai.speaking .stache{animation:talk .28s ease-in-out infinite alternate}
+@keyframes talk{to{transform:translateY(1.6px) scaleY(1.06)}}
+#abai.g-point .arm{transform:rotate(-38deg)}
+#abai.g-point .head{transform:rotate(-5deg)}
+#abai.g-open .arm{transform:rotate(-14deg)}
+#abai.g-open .head{transform:rotate(3deg)}
+#abai.g-down .arm{transform:rotate(-2deg)}
+#abai.g-down .head{transform:rotate(4deg) translateY(2px)}
+#abai.g-chest .arm{transform:rotate(-62deg)}
+#abai.g-chest .head{transform:rotate(-2deg) translateY(3px)}
+#abai.g-sleep .arm{transform:rotate(14deg)}
+#abai.g-sleep .head{transform:rotate(7deg)}
+
+/* ===== Scene states (cumulative classes s1..s8) ===== */
+#scene *{transition:fill 2.4s ease,opacity 2.4s ease,transform 3s ease}
+#scene .nightSky{opacity:0}
+#scene.s1 .nightSky{opacity:1}
+#scene .stars{opacity:0}
+#scene.s1 .stars{opacity:1}
+#scene .star{animation:tw 3s ease-in-out infinite alternate}
+@keyframes tw{to{opacity:.25}}
+#scene .moon{transform:translateY(34px);opacity:.25}
+#scene.s1 .moon{transform:none;opacity:1}
+#scene .moonGlow{opacity:.08}
+#scene.s7 .moonGlow{opacity:.45}
+#scene .far{fill:#5d6796}
+#scene.s1 .far{fill:#28325a}
+#scene .near{fill:#434d7d}
+#scene.s1 .near{fill:#1a2242}
+#scene .snow{fill:#e7e3f2;opacity:.9}
+#scene.s2 .snow{opacity:.35}
+#scene .mtns{transform:none}
+#scene.s2 .mtns{transform:translateY(3px)}
+#scene .capFog{opacity:0}
+#scene.s2 .capFog{opacity:.55}
+#scene .ground{fill:#6c6a45}
+#scene.s1 .ground{fill:#232a35}
+#scene .grass line{stroke:#9b9a62;transform-box:fill-box;transform-origin:bottom;animation:sway 1.4s ease-in-out infinite alternate}
+#scene.s1 .grass line{stroke:#3a4250}
+#scene.s3 .grass line{animation-play-state:paused}
+@keyframes sway{from{transform:rotate(-10deg)}to{transform:rotate(12deg)}}
+#scene .fog{opacity:0}
+#scene.s4 .fog{opacity:.7}
+#scene .fog ellipse{animation:drift 14s linear infinite alternate}
+@keyframes drift{to{transform:translateX(40px)}}
+#scene .road{stroke:#c3a676}
+#scene.s1 .road{stroke:#4a4a52}
+#scene .dust circle{fill:#d8c39a;animation:dust 1.8s linear infinite}
+#scene .dust circle:nth-child(2){animation-delay:.5s}
+#scene .dust circle:nth-child(3){animation-delay:1s}
+#scene .dust circle:nth-child(4){animation-delay:1.3s}
+@keyframes dust{from{transform:translate(0,0);opacity:.9}to{transform:translate(26px,-14px);opacity:0}}
+#scene.s5 .dust{opacity:0}
+#scene .trunk{stroke:#4a3a2c}
+#scene .leaves ellipse{fill:#7e9a55;transform-box:fill-box;transform-origin:center;animation:tremble .22s ease-in-out infinite alternate}
+#scene .leaves ellipse:nth-child(even){animation-duration:.3s}
+#scene.s1 .leaves ellipse{fill:#2f3d33}
+#scene.s6 .leaves ellipse{animation-play-state:paused}
+@keyframes tremble{from{transform:rotate(-14deg)}to{transform:rotate(14deg)}}
+#scene .yurt{fill:#cfc3a6}
+#scene.s1 .yurt{fill:#3d4252}
+#scene .lamp{opacity:0}
+#scene.s8 .lamp{opacity:1}
+#scene .lampGlow{opacity:0}
+#scene.s8 .lampGlow{opacity:.55}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important}
+  #scene *,#abai *{transition-duration:.01s!important}
+}
+@media (max-height:640px){.portrait svg{max-height:170px}.subs{height:64px}.subs li{height:32px}}
+</style>
+
+<video id="cam" playsinline muted autoplay></video>
+<div id="camDim"></div>
+<svg id="lockSvg"><polygon id="lockPoly" points=""/></svg>
+
+<div id="scanUI" hidden>
+  <div class="topbar"><span class="chip">AR · Абай</span><button class="chip" id="demoBtn2" type="button">Без камеры</button></div>
+  <div id="finder"><i></i><i></i><i></i><i></i><b></b></div>
+  <div id="scanHint">Наведите камеру на QR-код в учебнике<small>Держите телефон ровно, 15–30 см от страницы</small></div>
+</div>
+
+<section id="start">
+  <svg class="medal" viewBox="0 0 160 160" aria-hidden="true">
+    <circle cx="80" cy="80" r="74" fill="none" stroke="#d9a94e" stroke-width="2"/>
+    <circle cx="80" cy="80" r="66" fill="#1a2548" stroke="#d9a94e" stroke-width=".8" stroke-dasharray="2 4"/>
+    <g fill="none" stroke="#d9a94e" stroke-width="2.2" stroke-linecap="round">
+      <path d="M80 26 C 62 26, 58 46, 70 48 C 78 49, 78 40, 72 40"/>
+      <path d="M80 26 C 98 26, 102 46, 90 48 C 82 49, 82 40, 88 40"/>
+      <path d="M80 134 C 62 134, 58 114, 70 112 C 78 111, 78 120, 72 120"/>
+      <path d="M80 134 C 98 134, 102 114, 90 112 C 82 111, 82 120, 88 120"/>
+    </g>
+    <text x="80" y="92" text-anchor="middle" font-family="PT Serif, Georgia, serif" font-size="34" fill="#ece6d6">AR</text>
+  </svg>
+  <h1><em>AR-учебник литературы</em>Ожившие портреты</h1>
+  <p>Наведите камеру на QR-код рядом со стихотворением, и поэт прочитает его вам.</p>
+  <button class="btn" id="startBtn" type="button">Сканировать QR</button>
+  <button class="btn ghost" id="demoBtn" type="button">Открыть без камеры</button>
+  <div id="camErr" hidden></div>
+</section>
+
+<article id="card" hidden aria-live="polite">
+  <div class="cardHead">
+    <div class="ttl"><b id="cTitle"></b><span id="cAuthor"></span></div>
+    <div class="seg" role="group" aria-label="Язык">
+      <button type="button" data-lang="ru" aria-pressed="true">РУС</button>
+      <button type="button" data-lang="kk" aria-pressed="false">ҚАЗ</button>
+    </div>
+    <button class="iconBtn" id="closeBtn" type="button" aria-label="Закрыть">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <svg class="ornament" viewBox="0 0 400 12" preserveAspectRatio="none" aria-hidden="true">
+    <defs><pattern id="orn" width="24" height="12" patternUnits="userSpaceOnUse">
+      <path d="M0 6 H6 C 6 1, 12 1, 12 6 C 12 9, 8 9, 8 6 M24 6 H18 C 18 11, 12 11, 12 6 C 12 3, 16 3, 16 6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+    </pattern></defs>
+    <rect width="400" height="12" fill="url(#orn)"/>
+  </svg>
+
+  <div class="stage">
+    <div class="portrait">
+      <svg id="abai" viewBox="0 0 240 280" role="img" aria-label="Абай Кунанбаев">
+        <defs>
+          <clipPath id="medalClip"><circle cx="120" cy="140" r="116"/></clipPath>
+        </defs>
+        <circle cx="120" cy="140" r="122" fill="none" stroke="#d9a94e" stroke-width="2"/>
+        <circle cx="120" cy="140" r="116" fill="#1d2a4f"/>
+        <g clip-path="url(#medalClip)">
+          <g class="fig">
+            <!-- shapan -->
+            <path d="M18 290 C 22 222, 70 196, 120 194 C 170 196, 218 222, 222 290 Z" fill="#2b2a44"/>
+            <path d="M120 196 L 92 290 M120 196 L148 290" stroke="#d9a94e" stroke-width="5" fill="none"/>
+            <path d="M104 198 L120 236 L136 198 Z" fill="#e6dcc6"/>
+            <!-- neck -->
+            <rect x="107" y="160" width="26" height="40" rx="8" fill="#b9875c"/>
+            <g class="head">
+              <ellipse cx="81" cy="124" rx="7" ry="11" fill="#b9875c"/>
+              <ellipse cx="159" cy="124" rx="7" ry="11" fill="#b9875c"/>
+              <ellipse cx="120" cy="120" rx="38" ry="47" fill="#c9966a"/>
+              <!-- beard -->
+              <path d="M83 118 C 82 160, 100 196, 120 202 C 140 196, 158 160, 157 118 C 152 140, 140 152, 120 152 C 100 152, 88 140, 83 118 Z" fill="#3a322d"/>
+              <path d="M100 160 C 104 176, 110 188, 116 196 M128 172 C 131 182, 134 188, 138 192 M112 168 C 114 178, 117 186, 120 194" stroke="#8b8178" stroke-width="1.6" fill="none" opacity=".7"/>
+              <!-- nose -->
+              <path d="M120 112 L 113 134 Q 120 138 127 134 Z" fill="#a9774f"/>
+              <!-- mustache -->
+              <path class="stache" d="M97 145 C 106 135, 116 137, 120 141 C 124 137, 134 135, 143 145 C 134 143, 126 146, 120 145 C 114 146, 106 143, 97 145 Z" fill="#2a2421"/>
+              <!-- eyes -->
+              <g class="eyes"><ellipse cx="105" cy="113" rx="4.2" ry="3.2" fill="#1b1816"/><ellipse cx="135" cy="113" rx="4.2" ry="3.2" fill="#1b1816"/></g>
+              <path d="M95 104 C 100 99, 108 99, 113 102 M127 102 C 132 99, 140 99, 145 104" stroke="#2a2421" stroke-width="4" stroke-linecap="round" fill="none"/>
+              <!-- cap: velvet crown + fur band -->
+              <path d="M86 84 C 84 46, 156 46, 154 84 Z" fill="#251f2c"/>
+              <path d="M90 60 C 104 54, 136 54, 150 60" stroke="#d9a94e" stroke-width="1.6" fill="none" opacity=".7"/>
+              <path d="M78 92 C 77 80, 82 74, 92 75 C 96 70, 104 72, 108 73 C 114 69, 126 69, 132 73 C 136 72, 144 70, 148 75 C 158 74, 163 80, 162 92 C 152 88, 140 89, 132 90 C 124 88, 116 88, 108 90 C 100 89, 88 88, 78 92 Z" fill="#5c4637"/>
+            </g>
+            <!-- gesturing arm -->
+            <g class="arm">
+              <path d="M188 290 L 194 214 C 195 204, 220 204, 221 214 L 226 290 Z" fill="#33314f"/>
+              <rect x="191" y="206" width="33" height="10" rx="4" fill="#d9a94e"/>
+              <ellipse cx="207" cy="194" rx="13" ry="15" fill="#c9966a"/>
+              <path d="M196 196 C 190 190, 190 182, 196 182" stroke="#c9966a" stroke-width="7" stroke-linecap="round" fill="none"/>
+              <path d="M201 182 L 201 170 M207 180 L 207 166 M213 182 L 213 170" stroke="#c9966a" stroke-width="6" stroke-linecap="round"/>
+            </g>
+          </g>
+        </g>
+      </svg>
+    </div>
+
+    <div class="scene">
+      <svg id="scene" viewBox="0 0 400 180" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <linearGradient id="dusk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#36447a"/><stop offset=".7" stop-color="#b9806d"/><stop offset="1" stop-color="#e2a874"/></linearGradient>
+          <linearGradient id="night" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050a1a"/><stop offset="1" stop-color="#18234a"/></linearGradient>
+          <filter id="blur6" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+          <radialGradient id="glow"><stop offset="0" stop-color="#f6e2a8"/><stop offset="1" stop-color="#f6e2a8" stop-opacity="0"/></radialGradient>
+          <radialGradient id="lampG"><stop offset="0" stop-color="#ffcf73"/><stop offset="1" stop-color="#ffcf73" stop-opacity="0"/></radialGradient>
+        </defs>
+        <rect width="400" height="180" fill="url(#dusk)"/>
+        <rect class="nightSky" width="400" height="180" fill="url(#night)"/>
+        <g class="stars" id="stars"></g>
+        <circle class="moonGlow" cx="322" cy="38" r="40" fill="url(#glow)"/>
+        <circle class="moon" cx="322" cy="38" r="13" fill="#f3e3b5"/>
+        <g class="mtns">
+          <path class="far" d="M0 120 L40 82 L66 100 L112 52 L150 92 L178 74 L222 108 L262 60 L300 96 L338 78 L400 112 L400 180 L0 180 Z"/>
+          <path class="snow" d="M100 64 L112 52 L124 64 L117 61 L112 66 L106 61 Z M252 70 L262 60 L272 70 L266 68 L262 72 L257 68 Z"/>
+          <g class="capFog" filter="url(#blur6)"><ellipse cx="112" cy="70" rx="40" ry="7" fill="#9aa6cc"/><ellipse cx="262" cy="78" rx="44" ry="7" fill="#9aa6cc"/></g>
+          <path class="near" d="M0 136 L30 112 L58 124 L96 96 L140 128 L190 104 L236 132 L280 112 L330 134 L370 118 L400 128 L400 180 L0 180 Z"/>
+        </g>
+        <g class="fog" filter="url(#blur6)">
+          <ellipse cx="80" cy="132" rx="90" ry="9" fill="#a8b2d4"/>
+          <ellipse cx="300" cy="138" rx="110" ry="10" fill="#a8b2d4"/>
+        </g>
+        <path class="ground" d="M0 146 C 80 138, 160 142, 240 140 C 300 139, 360 142, 400 140 L400 180 L0 180 Z"/>
+        <path class="road" d="M120 180 C 150 168, 175 158, 205 146" fill="none" stroke-width="5" stroke-linecap="round"/>
+        <g class="dust"><circle cx="140" cy="172" r="2.4"/><circle cx="158" cy="165" r="2"/><circle cx="176" cy="158" r="2.6"/><circle cx="192" cy="152" r="1.8"/></g>
+        <g class="grass" stroke-width="1.6" stroke-linecap="round">
+          <line x1="22" y1="172" x2="22" y2="163"/><line x1="30" y1="174" x2="31" y2="164"/><line x1="214" y1="166" x2="214" y2="157"/>
+          <line x1="226" y1="170" x2="227" y2="160"/><line x1="262" y1="174" x2="262" y2="165"/><line x1="380" y1="170" x2="380" y2="161"/><line x1="388" y1="172" x2="389" y2="163"/>
+        </g>
+        <line class="trunk" x1="96" y1="150" x2="96" y2="118" stroke-width="4" stroke-linecap="round"/>
+        <g class="leaves">
+          <ellipse cx="88" cy="116" rx="7" ry="4"/><ellipse cx="102" cy="112" rx="7" ry="4"/><ellipse cx="94" cy="106" rx="7" ry="4"/>
+          <ellipse cx="106" cy="122" rx="6" ry="3.5"/><ellipse cx="84" cy="126" rx="6" ry="3.5"/><ellipse cx="98" cy="98" rx="6" ry="3.5"/>
+        </g>
+        <circle class="lampGlow" cx="287" cy="139" r="22" fill="url(#lampG)"/>
+        <path class="yurt" d="M262 146 L262 134 C 268 120, 306 120, 312 134 L312 146 Z"/>
+        <rect class="lamp" x="282" y="134" width="10" height="12" rx="1" fill="#ffcf73"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="subs"><ol id="subs"></ol></div>
+  <div class="note" id="note"></div>
+  <div class="controls">
+    <button class="iconBtn" id="restartBtn" type="button" aria-label="С начала">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v5h5"/></svg>
+    </button>
+    <button class="play" id="playBtn" type="button" aria-label="Слушать"></button>
+    <span style="width:38px"></span>
+  </div>
+</article>
+
+<script>
+/* ---------- Content ---------- */
+const POEMS = {
+  "abai-tau": {
+    title:  { kk: "Қараңғы түнде тау қалғып", ru: "Горные вершины" },
+    author: { kk: "Абай Құнанбайұлы", ru: "М. Ю. Лермонтов · перевёл Абай" },
+    note:   { kk: "Абай бұл өлеңді М. Лермонтовтан аударған.", ru: "Абай перевёл это стихотворение Лермонтова на казахский язык." },
+    lines: {
+      kk: ["Қараңғы түнде тау қалғып,","Ұйқыға кетер балбырап.","Даланы жым-жырт, дел-сал ғып,","Түн басады салбырап.","Шаң шығармас жол дағы,","Сілкіне алмас жапырақ.","Тыншығарсың сен дағы,","Сабыр қылсаң азырақ."],
+      ru: ["Горные вершины","Спят во тьме ночной;","Тихие долины","Полны свежей мглой;","Не пылит дорога,","Не дрожат листы…","Подожди немного,","Отдохнёшь и ты."]
+    },
+    // what happens on each line: scene step + Abai gesture
+    cues: [ {s:1,g:"point"}, {s:2,g:"sleep"}, {s:3,g:"open"}, {s:4,g:"open"}, {s:5,g:"down"}, {s:6,g:"sleep"}, {s:7,g:"chest"}, {s:8,g:"chest"} ]
+  }
+};
+
+/* ---------- Elements ---------- */
+const $ = id => document.getElementById(id);
+const video=$("cam"), card=$("card"), abai=$("abai"), scene=$("scene"), subs=$("subs");
+const GESTURES=["g-point","g-open","g-down","g-chest","g-sleep"];
+const ICON_PLAY='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>';
+const ICON_PAUSE='<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4.2" height="15" rx="1"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1"/></svg>';
+
+/* stars */
+(()=>{const g=$("stars");for(let i=0;i<40;i++){const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+  c.setAttribute("cx",(Math.random()*400).toFixed(1));c.setAttribute("cy",(Math.random()*90).toFixed(1));
+  c.setAttribute("r",(Math.random()*1.1+.35).toFixed(2));c.setAttribute("fill","#fff");c.setAttribute("class","star");
+  c.style.animationDelay=(Math.random()*3).toFixed(2)+"s";g.appendChild(c);}})();
+
+/* ---------- Speech ---------- */
+let voices=[];
+function loadVoices(){ try{ voices=speechSynthesis.getVoices()||[] }catch(e){ voices=[] } }
+if("speechSynthesis" in window){ loadVoices(); speechSynthesis.onvoiceschanged=loadVoices; }
+function pickVoice(lang){
+  const pref=v=>(/google|milena|yuri|dmitry|natural/i.test(v.name)?0:1);
+  const list=voices.filter(v=>v.lang&&v.lang.toLowerCase().startsWith(lang)).sort((a,b)=>pref(a)-pref(b));
+  return list[0]||null;
+}
+function unlockSpeech(){ try{ const u=new SpeechSynthesisUtterance(" "); u.volume=0; speechSynthesis.speak(u);}catch(e){} }
+
+function speak(text,lang,done){
+  let finished=false; const fin=()=>{ if(finished) return; finished=true; clearTimeout(safety); done(); };
+  const est=900+text.length*80;
+  if(!("speechSynthesis" in window)){ var safety=setTimeout(fin,est); return; }
+  let v=pickVoice(lang), uLang=lang==="kk"?"kk-KZ":"ru-RU";
+  if(!v && lang==="kk"){ v=pickVoice("ru"); uLang="ru-RU"; }
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang=uLang; if(v) u.voice=v; u.rate=.8; u.pitch=.72;
+  u.onend=fin; u.onerror=fin;
+  var safety=setTimeout(fin,Math.max(est*2.6,7000));
+  try{ speechSynthesis.speak(u);}catch(e){ fin(); }
+}
+function stopSpeech(){ try{ speechSynthesis.cancel(); }catch(e){} }
+
+/* ---------- Player ---------- */
+let poem=null, lang="ru", cur=-1, playing=false, token=0;
+
+function render(){
+  $("cTitle").textContent=poem.title[lang];
+  $("cAuthor").textContent=poem.author[lang];
+  subs.innerHTML=poem.lines[lang].map(l=>`<li>${l}</li>`).join("");
+  let note=poem.note[lang];
+  if(lang==="kk" && "speechSynthesis" in window && voices.length && !pickVoice("kk")) note+=" Казахского голоса в телефоне нет — читает русский синтезатор.";
+  $("note").textContent=note;
+  document.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.lang===lang)));
+  highlight(-1);
+}
+function highlight(i){
+  const items=[...subs.children];
+  items.forEach((li,k)=>{li.classList.toggle("cur",k===i);li.classList.toggle("done",k<i);});
+  const shift=Math.max(i,0)*32 - 32;
+  subs.style.transform=`translateY(${-shift}px)`;
+}
+function setGesture(g){ abai.classList.remove(...GESTURES); if(g) abai.classList.add("g-"+g); }
+function resetScene(){ for(let k=1;k<=8;k++) scene.classList.remove("s"+k); }
+function applyCue(i){ const c=poem.cues[i]; for(let k=1;k<=c.s;k++) scene.classList.add("s"+k); setGesture(c.g); }
+function setPlayIcon(){ $("playBtn").innerHTML=playing?ICON_PAUSE:ICON_PLAY; $("playBtn").setAttribute("aria-label",playing?"Пауза":"Слушать"); }
+
+function playFrom(i){
+  const t=++token; stopSpeech(); playing=true; setPlayIcon();
+  if(i<=0){ resetScene(); setGesture(null); }
+  setTimeout(()=>step(Math.max(i,0),t), i<=0?700:150);
+}
+function step(i,t){
+  if(t!==token) return;
+  const lines=poem.lines[lang];
+  if(i>=lines.length){ finish(); return; }
+  cur=i; highlight(i); applyCue(i); abai.classList.add("speaking");
+  speak(lines[i],lang,()=>{ if(t!==token) return; abai.classList.remove("speaking"); setTimeout(()=>step(i+1,t),500); });
+}
+function pause(){ token++; stopSpeech(); playing=false; abai.classList.remove("speaking"); setPlayIcon(); }
+function finish(){ playing=false; cur=-1; abai.classList.remove("speaking"); setGesture("chest"); setPlayIcon(); }
+
+$("playBtn").onclick=()=>{ if(playing) pause(); else playFrom(cur<0?0:cur); };
+$("restartBtn").onclick=()=>playFrom(0);
+document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{
+  if(b.dataset.lang===lang) return; lang=b.dataset.lang; pause(); cur=-1; render(); playFrom(0);
+});
+
+/* ---------- Card open / close ---------- */
+function openPoem(key, origin){
+  poem=POEMS[key]; if(!poem) return;
+  scanning=false; $("scanUI").hidden=true; $("start").hidden=true;
+  document.body.classList.add("open");
+  card.hidden=false; render(); resetScene(); setGesture(null); cur=-1;
+  const r=card.getBoundingClientRect();
+  const ox=origin?origin.x:innerWidth/2, oy=origin?origin.y:innerHeight/2;
+  card.style.setProperty("--fx",(ox-(r.left+r.width/2))+"px");
+  card.style.setProperty("--fy",(oy-(r.top+r.height/2))+"px");
+  card.classList.remove("enter"); void card.offsetWidth; card.classList.add("enter");
+  playFrom(0);
+}
+$("closeBtn").onclick=()=>{
+  pause(); card.hidden=true; document.body.classList.remove("open");
+  if(stream){ $("scanUI").hidden=false; scanning=true; lastHit=""; requestAnimationFrame(tick); }
+  else { $("start").hidden=false; }
+};
+
+/* ---------- Camera + QR ---------- */
+let stream=null, scanning=false, lastScan=0, lastHit="";
+const cvs=document.createElement("canvas"), ctx=cvs.getContext("2d",{willReadFrequently:true});
+
+function matchKey(data){
+  data=(data||"").trim();
+  for(const k in POEMS){ if(data===k||data.endsWith("#"+k)||data.endsWith("/"+k)||data.endsWith("="+k)) return k; }
+  return null;
+}
+async function startCamera(){
+  unlockSpeech();
+  const err=$("camErr"); err.hidden=true;
+  try{ navigator.wakeLock&&navigator.wakeLock.request("screen").catch(()=>{}); }catch(e){}
+  if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    err.textContent="Камера доступна только по HTTPS или на localhost. Откройте страницу по защищённой ссылке или нажмите «Открыть без камеры».";
+    err.hidden=false; return;
+  }
+  if(typeof jsQR!=="function"){ err.textContent="Не загрузился модуль распознавания QR. Проверьте интернет и обновите страницу."; err.hidden=false; return; }
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false});
+    video.srcObject=stream; await video.play();
+    $("start").hidden=true; $("scanUI").hidden=false; scanning=true; requestAnimationFrame(tick);
+  }catch(e){
+    err.textContent = e&&e.name==="NotAllowedError"
+      ? "Доступ к камере запрещён. Разрешите камеру в настройках браузера для этого сайта и попробуйте снова."
+      : "Камера не запустилась: "+(e&&e.message||e)+". Можно открыть стихотворение без камеры.";
+    err.hidden=false;
+  }
+}
+function tick(ts){
+  if(!scanning) return;
+  requestAnimationFrame(tick);
+  if(ts-lastScan<140||video.readyState<2) return;
+  lastScan=ts;
+  const vw=video.videoWidth, vh=video.videoHeight; if(!vw) return;
+  const scale=Math.min(1,640/Math.max(vw,vh)); const w=Math.round(vw*scale), h=Math.round(vh*scale);
+  cvs.width=w; cvs.height=h; ctx.drawImage(video,0,0,w,h);
+  const code=jsQR(ctx.getImageData(0,0,w,h).data,w,h,{inversionAttempts:"dontInvert"});
+  if(!code) return;
+  const key=matchKey(code.data); if(!key||key===lastHit) return;
+  lastHit=key;
+  // map QR corners from canvas to screen (video is object-fit: cover)
+  const s=Math.max(innerWidth/vw,innerHeight/vh), offX=(innerWidth-vw*s)/2, offY=(innerHeight-vh*s)/2;
+  const m=p=>({x:p.x/scale*s+offX,y:p.y/scale*s+offY});
+  const L=code.location, pts=[L.topLeftCorner,L.topRightCorner,L.bottomRightCorner,L.bottomLeftCorner].map(m);
+  $("lockPoly").setAttribute("points",pts.map(p=>p.x.toFixed(0)+","+p.y.toFixed(0)).join(" "));
+  const lock=$("lockSvg"); lock.classList.add("on");
+  try{ navigator.vibrate&&navigator.vibrate(40);}catch(e){}
+  const c={x:pts.reduce((a,p)=>a+p.x,0)/4,y:pts.reduce((a,p)=>a+p.y,0)/4};
+  scanning=false;
+  setTimeout(()=>{ lock.classList.remove("on"); openPoem(key,c); },550);
+}
+
+$("startBtn").onclick=startCamera;
+$("demoBtn").onclick=()=>{ unlockSpeech(); openPoem("abai-tau"); };
+$("demoBtn2").onclick=()=>{ unlockSpeech(); openPoem("abai-tau"); };
+
+/* opened via a QR that holds a link like …/index.html#abai-tau */
+const fromHash=location.hash.replace("#","");
+if(POEMS[fromHash]){ $("demoBtn").textContent="Открыть стихотворение"; $("demoBtn").classList.remove("ghost"); $("startBtn").classList.add("ghost"); }
+setPlayIcon();
+</script>
