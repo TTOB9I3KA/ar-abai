@@ -7,7 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
 <style>
-/* Layout: live camera fills the screen; a cyan hologram of the poet stands on the scanned QR; poem scene + subtitles dock at the bottom */
+/* Layout: live camera fills the screen; top: the poet as a hologram, middle: the poem as a colour hologram on a projector table, bottom: subtitles */
 :root{
   --ink:#07101f;        /* night ink, app ground */
   --ink-2:#0f1a2e;      /* panel surface */
@@ -40,6 +40,8 @@ body.nocam #room{display:block}
 body:not(.open) #holo{pointer-events:none}
 #shade{position:fixed;left:0;right:0;bottom:0;height:45%;background:linear-gradient(transparent,rgba(7,16,31,.85));pointer-events:none;opacity:0;transition:opacity .6s}
 body.open #shade{opacity:1}
+body.open #cam{filter:brightness(.5) saturate(.8)}
+#cam{transition:filter .8s}
 #lockSvg{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
 #lockPoly{fill:var(--holo-soft);stroke:var(--holo);stroke-width:3;opacity:0;transition:opacity .2s}
 #lockSvg.on #lockPoly{opacity:1}
@@ -89,8 +91,6 @@ body.open #shade{opacity:1}
   max-width:520px;margin:0 auto;background:rgba(15,26,46,.92);border:1px solid var(--line);border-radius:20px;overflow:hidden;
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);animation:dock .6s .35s cubic-bezier(.2,.9,.25,1) both}
 @keyframes dock{from{transform:translateY(40px);opacity:0}}
-.scene{height:118px;position:relative;border-bottom:1px solid var(--line)}
-.scene svg{position:absolute;inset:0;width:100%;height:100%}
 .subs{height:96px;overflow:hidden;-webkit-mask-image:linear-gradient(transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(transparent,#000 22%,#000 78%,transparent)}
 .subs ol{list-style:none;margin:0;padding:0;transition:transform .55s cubic-bezier(.3,.7,.3,1)}
 .subs li{height:32px;line-height:32px;text-align:center;font-family:var(--f-verse);font-size:17px;color:var(--muted);opacity:.45;transition:color .4s,opacity .4s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-inline:12px}
@@ -102,39 +102,8 @@ body.open #shade{opacity:1}
 .play svg{width:22px;height:22px}
 .hint{width:38px;font-size:11px;color:var(--muted);text-align:center;line-height:1.1}
 
-/* scene states (cumulative s1..s8) */
-#scene *{transition:fill 2.4s ease,opacity 2.4s ease,transform 3s ease}
-#scene .nightSky{opacity:0} #scene.s1 .nightSky{opacity:1}
-#scene .stars{opacity:0} #scene.s1 .stars{opacity:1}
-#scene .star{animation:tw 3s ease-in-out infinite alternate} @keyframes tw{to{opacity:.25}}
-#scene .moon{transform:translateY(34px);opacity:.25} #scene.s1 .moon{transform:none;opacity:1}
-#scene .moonGlow{opacity:.08} #scene.s7 .moonGlow{opacity:.45}
-#scene .far{fill:#5d6796} #scene.s1 .far{fill:#28325a}
-#scene .near{fill:#434d7d} #scene.s1 .near{fill:#1a2242}
-#scene .snow{fill:#e7e3f2;opacity:.9} #scene.s2 .snow{opacity:.35}
-#scene.s2 .mtns{transform:translateY(3px)}
-#scene .capFog{opacity:0} #scene.s2 .capFog{opacity:.55}
-#scene .ground{fill:#6c6a45} #scene.s1 .ground{fill:#232a35}
-#scene .grass line{stroke:#9b9a62;transform-box:fill-box;transform-origin:bottom;animation:sway 1.4s ease-in-out infinite alternate}
-#scene.s1 .grass line{stroke:#3a4250} #scene.s3 .grass line{animation-play-state:paused}
-@keyframes sway{from{transform:rotate(-10deg)}to{transform:rotate(12deg)}}
-#scene .fog{opacity:0} #scene.s4 .fog{opacity:.7}
-#scene .fog ellipse{animation:drift 14s linear infinite alternate} @keyframes drift{to{transform:translateX(40px)}}
-#scene .road{stroke:#c3a676} #scene.s1 .road{stroke:#4a4a52}
-#scene .dust circle{fill:#d8c39a;animation:dust 1.8s linear infinite}
-#scene .dust circle:nth-child(2){animation-delay:.5s} #scene .dust circle:nth-child(3){animation-delay:1s} #scene .dust circle:nth-child(4){animation-delay:1.3s}
-@keyframes dust{from{transform:translate(0,0);opacity:.9}to{transform:translate(26px,-14px);opacity:0}}
-#scene.s5 .dust{opacity:0}
-#scene .trunk{stroke:#4a3a2c}
-#scene .leaves ellipse{fill:#7e9a55;transform-box:fill-box;transform-origin:center;animation:tremble .22s ease-in-out infinite alternate}
-#scene .leaves ellipse:nth-child(even){animation-duration:.3s}
-#scene.s1 .leaves ellipse{fill:#2f3d33} #scene.s6 .leaves ellipse{animation-play-state:paused}
-@keyframes tremble{from{transform:rotate(-14deg)}to{transform:rotate(14deg)}}
-#scene .yurt{fill:#cfc3a6} #scene.s1 .yurt{fill:#3d4252}
-#scene .lamp{opacity:0} #scene.s8 .lamp{opacity:1}
-#scene .lampGlow{opacity:0} #scene.s8 .lampGlow{opacity:.55}
-@media (prefers-reduced-motion:reduce){*{animation:none!important}#scene *{transition-duration:.01s!important}}
-@media (max-height:660px){.scene{height:84px}.subs{height:64px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+@media (max-height:660px){.subs{height:64px}}
 </style>
 
 <video id="cam" playsinline muted autoplay></video>
@@ -180,47 +149,6 @@ body.open #shade{opacity:1}
 </header>
 
 <section id="panel" hidden aria-live="polite">
-  <div class="scene">
-<svg id="scene" viewBox="0 0 400 180" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-        <defs>
-          <linearGradient id="dusk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#36447a"/><stop offset=".7" stop-color="#b9806d"/><stop offset="1" stop-color="#e2a874"/></linearGradient>
-          <linearGradient id="night" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050a1a"/><stop offset="1" stop-color="#18234a"/></linearGradient>
-          <filter id="blur6" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
-          <radialGradient id="glow"><stop offset="0" stop-color="#f6e2a8"/><stop offset="1" stop-color="#f6e2a8" stop-opacity="0"/></radialGradient>
-          <radialGradient id="lampG"><stop offset="0" stop-color="#ffcf73"/><stop offset="1" stop-color="#ffcf73" stop-opacity="0"/></radialGradient>
-        </defs>
-        <rect width="400" height="180" fill="url(#dusk)"/>
-        <rect class="nightSky" width="400" height="180" fill="url(#night)"/>
-        <g class="stars" id="stars"></g>
-        <circle class="moonGlow" cx="322" cy="38" r="40" fill="url(#glow)"/>
-        <circle class="moon" cx="322" cy="38" r="13" fill="#f3e3b5"/>
-        <g class="mtns">
-          <path class="far" d="M0 120 L40 82 L66 100 L112 52 L150 92 L178 74 L222 108 L262 60 L300 96 L338 78 L400 112 L400 180 L0 180 Z"/>
-          <path class="snow" d="M100 64 L112 52 L124 64 L117 61 L112 66 L106 61 Z M252 70 L262 60 L272 70 L266 68 L262 72 L257 68 Z"/>
-          <g class="capFog" filter="url(#blur6)"><ellipse cx="112" cy="70" rx="40" ry="7" fill="#9aa6cc"/><ellipse cx="262" cy="78" rx="44" ry="7" fill="#9aa6cc"/></g>
-          <path class="near" d="M0 136 L30 112 L58 124 L96 96 L140 128 L190 104 L236 132 L280 112 L330 134 L370 118 L400 128 L400 180 L0 180 Z"/>
-        </g>
-        <g class="fog" filter="url(#blur6)">
-          <ellipse cx="80" cy="132" rx="90" ry="9" fill="#a8b2d4"/>
-          <ellipse cx="300" cy="138" rx="110" ry="10" fill="#a8b2d4"/>
-        </g>
-        <path class="ground" d="M0 146 C 80 138, 160 142, 240 140 C 300 139, 360 142, 400 140 L400 180 L0 180 Z"/>
-        <path class="road" d="M120 180 C 150 168, 175 158, 205 146" fill="none" stroke-width="5" stroke-linecap="round"/>
-        <g class="dust"><circle cx="140" cy="172" r="2.4"/><circle cx="158" cy="165" r="2"/><circle cx="176" cy="158" r="2.6"/><circle cx="192" cy="152" r="1.8"/></g>
-        <g class="grass" stroke-width="1.6" stroke-linecap="round">
-          <line x1="22" y1="172" x2="22" y2="163"/><line x1="30" y1="174" x2="31" y2="164"/><line x1="214" y1="166" x2="214" y2="157"/>
-          <line x1="226" y1="170" x2="227" y2="160"/><line x1="262" y1="174" x2="262" y2="165"/><line x1="380" y1="170" x2="380" y2="161"/><line x1="388" y1="172" x2="389" y2="163"/>
-        </g>
-        <line class="trunk" x1="96" y1="150" x2="96" y2="118" stroke-width="4" stroke-linecap="round"/>
-        <g class="leaves">
-          <ellipse cx="88" cy="116" rx="7" ry="4"/><ellipse cx="102" cy="112" rx="7" ry="4"/><ellipse cx="94" cy="106" rx="7" ry="4"/>
-          <ellipse cx="106" cy="122" rx="6" ry="3.5"/><ellipse cx="84" cy="126" rx="6" ry="3.5"/><ellipse cx="98" cy="98" rx="6" ry="3.5"/>
-        </g>
-        <circle class="lampGlow" cx="287" cy="139" r="22" fill="url(#lampG)"/>
-        <path class="yurt" d="M262 146 L262 134 C 268 120, 306 120, 312 134 L312 146 Z"/>
-        <rect class="lamp" x="282" y="134" width="10" height="12" rx="1" fill="#ffcf73"/>
-      </svg>
-  </div>
   <div class="subs"><ol id="subs"></ol></div>
   <div class="note" id="note"></div>
   <div class="controls">
@@ -253,17 +181,11 @@ const POEMS = {
 const CUSTOM_MODEL_URL = "models/abai.glb";
 
 const $ = id => document.getElementById(id);
-const video=$("cam"), scene=$("scene"), subs=$("subs");
-
-/* stars in the poem scene */
-(()=>{const g=$("stars");for(let i=0;i<40;i++){const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
-  c.setAttribute("cx",(Math.random()*400).toFixed(1));c.setAttribute("cy",(Math.random()*90).toFixed(1));
-  c.setAttribute("r",(Math.random()*1.1+.35).toFixed(2));c.setAttribute("fill","#fff");c.setAttribute("class","star");
-  c.style.animationDelay=(Math.random()*3).toFixed(2)+"s";g.appendChild(c);}})();
+const video=$("cam"), subs=$("subs");
 
 /* ================= Hologram (three.js) ================= */
 const H = (() => {
-  const api = { ok:false, show(){}, hide(){}, setAnchor(){}, pose(){}, speaking(){} };
+  const api = { ok:false, show(){}, hide(){}, setAnchor(){}, pose(){}, speaking(){}, step(){} };
   if (typeof THREE === "undefined") return api;
   const canvas = $("holo");
   let renderer;
@@ -422,8 +344,122 @@ const H = (() => {
     loader.load(CUSTOM_MODEL_URL, g=>useScene(g.scene,true), undefined, ()=>loadEmbedded());
   } else loadEmbedded();
 
-  // ---- layout: place root at a screen point, size to available height
-  let W=1,Hh=1, anchor={x:0,y:0}, target={x:0,y:0}, holoPx=300, has=false;
+  const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // ================= Poem scene as a colour hologram (bottom) =================
+  const sceneRoot = new THREE.Group(), sceneTilt = new THREE.Group(), sceneSpin = new THREE.Group();
+  sceneRoot.add(sceneTilt); sceneTilt.add(sceneSpin); sceneTilt.rotation.x = 0.36; world.add(sceneRoot); sceneRoot.visible=false;
+  const SU = { uTime:U.uTime, uOpacity:{value:0}, uNight:{value:0}, uSleep:{value:0} };
+  const solidVS = `varying vec3 vN; varying vec3 vV; void main(){ vec4 mv=modelViewMatrix*vec4(position,1.); vN=normalize(normalMatrix*normal); vV=-mv.xyz; gl_Position=projectionMatrix*mv; }`;
+  function holoSolid(hex, k){
+    return new THREE.ShaderMaterial({
+      uniforms:{ uColor:{value:new THREE.Color(hex)}, uTime:U.uTime, uOpacity:{value:0}, uK:{value:k||1} },
+      transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, vertexShader:solidVS,
+      fragmentShader:`uniform vec3 uColor; uniform float uTime,uOpacity,uK; varying vec3 vN; varying vec3 vV;
+        void main(){ float f=pow(1.-abs(dot(normalize(vN),normalize(vV))),1.8);
+          float scan=.65+.35*sin(gl_FragCoord.y*1.3-uTime*12.);
+          float a=(.22+f*.9)*scan*uOpacity*uK; gl_FragColor=vec4(mix(uColor,vec3(1.),f*.25),a); }` });
+  }
+  const pts = (n,fn,size,colorFn)=>{ const p=new Float32Array(n*3), c=new Float32Array(n*3), col=new THREE.Color();
+    for(let i=0;i<n;i++){ const v=fn(i); p[i*3]=v[0];p[i*3+1]=v[1];p[i*3+2]=v[2]; col.set(colorFn?colorFn(i):0xffffff); c[i*3]=col.r;c[i*3+1]=col.g;c[i*3+2]=col.b; }
+    const g=new THREE.BufferGeometry(); g.setAttribute("position",new THREE.BufferAttribute(p,3)); g.setAttribute("color",new THREE.BufferAttribute(c,3));
+    const m=new THREE.PointsMaterial({ size, map:dot, vertexColors:true, transparent:true, opacity:0, depthWrite:false, blending:THREE.AdditiveBlending });
+    const o=new THREE.Points(g,m); o.userData.base=p.slice(); sceneSpin.add(o); return o; };
+  const R=Math.random;
+
+  // terrain: back ridge of peaks, open valley in front
+  const PEAKS=[[-1.25,-.8,1.4],[-.35,-.95,1.05],[.55,-.85,1.65],[1.45,-.7,1.15],[-1.8,-.35,.7],[-.9,-.2,.38],[1.05,-.25,.45]];
+  function hgt(x,z){ let h=0; for(const p of PEAKS){ const dx=(x-p[0])/.46, dz=(z-p[1])/.36; h+=p[2]*Math.exp(-(dx*dx+dz*dz)); }
+    h+=Math.sin(x*7.)*Math.sin(z*9.)*.03*Math.max(0,-z); return h + .02*Math.sin(x*3+z*2); }
+  const tg=new THREE.PlaneGeometry(4.2,2.6,140,86); tg.rotateX(-Math.PI/2);
+  { const a=tg.attributes.position; for(let i=0;i<a.count;i++){ a.setY(i,hgt(a.getX(i),a.getZ(i))); } tg.computeVertexNormals(); }
+  const terrainMat=new THREE.ShaderMaterial({
+    uniforms:SU, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide,
+    vertexShader:`varying float vH; varying vec2 vXZ; varying vec3 vN; varying vec3 vV;
+      void main(){ vH=position.y; vXZ=position.xz; vec4 mv=modelViewMatrix*vec4(position,1.); vN=normalize(normalMatrix*normal); vV=-mv.xyz; gl_Position=projectionMatrix*mv; }`,
+    fragmentShader:`uniform float uTime,uOpacity,uNight,uSleep; varying float vH; varying vec2 vXZ; varying vec3 vN; varying vec3 vV;
+      void main(){
+        vec3 valD=vec3(.95,.78,.35), valN=vec3(.15,.55,1.);
+        vec3 ridD=vec3(1.,.5,.75),  ridN=vec3(.55,.45,1.);
+        vec3 val=mix(valD,valN,uNight), rid=mix(ridD,ridN,uNight);
+        float t=smoothstep(.05,1.1,vH);
+        vec3 c=mix(val,rid,t);
+        c=mix(c,vec3(1.),smoothstep(1.15,1.4,vH)*(1.-uSleep*.6));
+        float contour=smoothstep(.06,0.,abs(fract(vH/.13)-.5)-.44);
+        float grid=smoothstep(.03,0.,abs(fract(vXZ.x*6.)-.5)-.47)+smoothstep(.03,0.,abs(fract(vXZ.y*6.)-.5)-.47);
+        float scan=.6+.4*sin(gl_FragCoord.y*1.3-uTime*10.);
+        vec2 e=vXZ/vec2(2.1,1.3); float fade=smoothstep(1.,.72,length(e));
+        float bright=1.-uSleep*.45*t;
+        float a=(.12+contour*.65*t+grid*.12*(1.-t)+t*.18)*scan*fade*uOpacity*bright;
+        gl_FragColor=vec4(c,a);
+      }` });
+  const terrain=new THREE.Mesh(tg,terrainMat); sceneSpin.add(terrain);
+
+  // sky: stars, moon
+  const stars=pts(220,()=>[(R()-.5)*4.4, 1.5+R()*1.0, -1.5+R()*1.4],.05,i=>i%5?0xffffff:0x9fd8ff);
+  const moonMat=holoSolid(0xffd77a,1.6); const moon=new THREE.Mesh(new THREE.SphereGeometry(.15,32,16),moonMat); moon.position.set(1.6,.7,-1.2); sceneSpin.add(moon);
+  const moonGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:dot,color:0xffd77a,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));
+  moonGlow.scale.set(1,1,1); moon.add(moonGlow); moonGlow.scale.setScalar(.9);
+
+  // mist in the valleys and on the peaks
+  const fog=pts(700,()=>[(R()-.5)*4, .1+R()*.22, -.7+R()*1.7],.065,()=>0xb8c8ff);
+  const capFog=pts(360,i=>{const p=PEAKS[i%4]; return [p[0]+(R()-.5)*.9, p[2]*.8+(R()-.5)*.14, p[1]+(R()-.5)*.5];},.08,()=>0xd9d2ff);
+
+  // road with dust
+  const roadPts=[[-.35,1.25],[-.05,.75],[.05,.3],[.35,-.15],[.5,-.45]].map(([x,z])=>new THREE.Vector3(x,hgt(x,z)+.03,z));
+  const roadCurve=new THREE.CatmullRomCurve3(roadPts);
+  const road=new THREE.Mesh(new THREE.TubeGeometry(roadCurve,80,.028,8,false),holoSolid(0xffa45c,1.4)); sceneSpin.add(road);
+  const dust=pts(90,()=>[0,0,0],.06,()=>0xffd3a0); const dustT=[...Array(90)].map(()=>R());
+
+  // tree with trembling leaves, grass
+  const tx=-1.3, tz=.55, ty=hgt(tx,tz);
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.025,.04,.5,10),holoSolid(0xff9a55,1.3)); trunk.position.set(tx,ty+.25,tz); sceneSpin.add(trunk);
+  const leaves=pts(260,()=>{const a=R()*6.28,b=Math.acos(2*R()-1),r=.2*Math.cbrt(R()); return [tx+Math.sin(b)*Math.cos(a)*r*1.2, ty+.58+Math.cos(b)*r, tz+Math.sin(b)*Math.sin(a)*r];},.055,()=>R()<.5?0x7dff9a:0xc6ff6b);
+  const grass=pts(320,()=>{const x=(R()-.5)*3.6, z=.4+R()*.8; return [x,hgt(x,z)+.02+R()*.05,z];},.035,()=>R()<.5?0x9dff7a:0xe8ff8a);
+
+  // yurt with a lamp
+  const yx=1.15, yz=.55, yy=hgt(yx,yz);
+  const yurtMat=holoSolid(0xffcf6e,1.2);
+  const yurtW=new THREE.Mesh(new THREE.CylinderGeometry(.21,.21,.14,24,1,true),yurtMat); yurtW.position.set(yx,yy+.07,yz); sceneSpin.add(yurtW);
+  const yurtR=new THREE.Mesh(new THREE.ConeGeometry(.23,.13,24,1,true),yurtMat); yurtR.position.set(yx,yy+.205,yz); sceneSpin.add(yurtR);
+  const lamp=new THREE.Sprite(new THREE.SpriteMaterial({map:dot,color:0xffa53d,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));
+  lamp.position.set(yx,yy+.06,yz+.22); lamp.scale.setScalar(.55); sceneSpin.add(lamp);
+
+  // projector table
+  const tableMat=new THREE.MeshBasicMaterial({map:baseTex,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,opacity:0,color:0x7fdcff});
+  const table=new THREE.Mesh(new THREE.PlaneGeometry(4.8,3),tableMat); table.rotation.x=-Math.PI/2; table.position.y=-.02; sceneTilt.add(table);
+
+  // state machine: line step -> targets
+  let sceneStep=0, sceneAppear=0, sceneAppearT=0, sceneYaw=0;
+  const S={night:0,sleep:0,moonY:.6,moonGlow:.3,fog:0,capFog:0,dust:1,leaves:1,grass:1,lamp:0};
+  function targets(){ const s=sceneStep; return {
+    night:s>=1?1:0, sleep:s>=2?1:0, moonY:s>=1?1.9:.7, moonGlow:s>=7?.95:(s>=1?.45:.25),
+    fog:s>=4?.55:0, capFog:s>=2?.5:0, dust:s>=5?0:1, leaves:s>=6?0:1, grass:s>=3?0:1, lamp:s>=8?1:0 }; }
+  function updateScene(t,dt){
+    sceneAppear+=(sceneAppearT-sceneAppear)*Math.min(1,dt*1.2);
+    const ap=sceneAppear, T=targets(), k=Math.min(1,dt*.9);
+    for(const key in S) S[key]+=(T[key]-S[key])*k;
+    SU.uNight.value=S.night; SU.uSleep.value=S.sleep; SU.uOpacity.value=ap;
+    tableMat.opacity=Math.min(1,ap*2)*.55;
+    stars.material.opacity=S.night*ap*(.75+.25*Math.sin(t*2.3));
+    moon.position.y=S.moonY; moonMat.uniforms.uOpacity.value=ap; moonGlow.material.opacity=S.moonGlow*ap;
+    fog.material.opacity=S.fog*ap; capFog.material.opacity=S.capFog*ap;
+    { const p=fog.geometry.attributes.position, b=fog.userData.base; for(let i=0;i<p.count;i++){ let x=b[i*3]+((t*.06+i*.001)%1)*0.6; if(x>2) x-=4; p.setX(i,x); } p.needsUpdate=true; }
+    // dust drifting along the road
+    { const p=dust.geometry.attributes.position; for(let i=0;i<90;i++){ dustT[i]=(dustT[i]+dt*.12)%1; const v=roadCurve.getPointAt(dustT[i]);
+        p.setXYZ(i,v.x+Math.sin(i*7+t*3)*.05, v.y+.03+Math.abs(Math.sin(i+t*2))*.08, v.z+Math.cos(i*5+t*3)*.05);} p.needsUpdate=true; }
+    dust.material.opacity=S.dust*ap*.9;
+    // leaves and grass tremble in the wind, then go still
+    const jig=(o,amp)=>{ const p=o.geometry.attributes.position,b=o.userData.base; for(let i=0;i<p.count;i++){
+        p.setX(i,b[i*3]+Math.sin(t*14+i*1.7)*amp); p.setY(i,b[i*3+1]+Math.cos(t*11+i)*amp*.5);} p.needsUpdate=true; };
+    jig(leaves,.025*S.leaves); jig(grass,.02*S.grass);
+    leaves.material.opacity=ap*(1-.5*S.night*.5); grass.material.opacity=ap*.8;
+    [road,trunk,yurtW].forEach(m=>m.material.uniforms.uOpacity.value=ap);
+    lamp.material.opacity=S.lamp*ap*(.85+.15*Math.sin(t*6));
+    sceneSpin.rotation.y=(reduced?0:Math.sin(t*.18)*.22)+sceneYaw;
+  }
+
+  // ---- layout: fixed zones between the top bar and the subtitle panel
+  let W=1,Hh=1, anchor={x:0,y:0}, holoPx=300, has=false;
   function wpp(){ return 2*Math.tan(FOV*Math.PI/360)*CAMZ/Hh; }
   function resize(){ W=innerWidth; Hh=innerHeight; renderer.setSize(W,Hh,false); camera.aspect=W/Hh; camera.updateProjectionMatrix(); layout(); }
   function bounds(){
@@ -431,24 +467,26 @@ const H = (() => {
     const panelTop=$("panel").hidden?Hh-40:$("panel").getBoundingClientRect().top-14;
     return {top,panelTop};
   }
-  function clampAnchor(p){
-    const b=bounds();
-    const minH=Math.min(220,(b.panelTop-b.top)*.7);
-    return { x:Math.min(Math.max(p.x,W*.22),W*.78), y:Math.min(Math.max(p.y,b.top+minH),b.panelTop-32) };
-  }
+  let sceneTopPx=0;
   function layout(){
     if(!has) return;
-    const b=bounds();
-    holoPx=Math.max(140,Math.min((anchor.y-b.top)*.92, W*.82, 480));
+    const b=bounds(), avail=Math.max(200,b.panelTop-b.top);
+    const abaiZone=avail*.56, sceneZone=avail-abaiZone;
+    anchor={x:W/2,y:b.top+abaiZone-10}; sceneTopPx=b.top+abaiZone;
+    holoPx=Math.max(120,Math.min(abaiZone*.97, W*.72, 440));
     const s=wpp(), Hw=holoPx*s;
-    root.position.set((anchor.x-W/2)*s, -(anchor.y-Hh/2)*s, 0);
-    const baseR=Math.min(Hw*.42, W*s*.36);
+    root.position.set(0, -(anchor.y-Hh/2)*s, 0);
+    const baseR=Math.min(Hw*.36, W*s*.3);
     base.scale.set(baseR*2,baseR*2,1);
     beam.scale.set(baseR/.62*1.05, Hw*.92, baseR/.62*1.05); beam.position.y=Hw*.46;
-    const bustH=Hw*.86, k=bustH/MODEL_H;
-    bust.scale.setScalar(k); bust.position.y=Hw*.1 - MODEL_MIN*k;
+    const bustH=Hw*.88, k=bustH/MODEL_H;
+    bust.scale.setScalar(k); bust.position.y=Hw*.08 - MODEL_MIN*k;
     motes.scale.set(baseR*1.6,Hw,baseR*1.6);
     U.uH.value=Hw; scaleK=k;
+    // poem scene: centred in its zone, width fits the screen
+    const sw=Math.min(W*.96, sceneZone*2.3)*s/4.4;
+    sceneRoot.scale.setScalar(sw);
+    sceneRoot.position.set(0, -((b.top+abaiZone+sceneZone*.72)-Hh/2)*s, 0);
   }
   let scaleK=1;
   addEventListener("resize",resize);
@@ -456,18 +494,17 @@ const H = (() => {
   // ---- pose & interaction
   const POSES={ look:{y:.22,x:-.1}, sleep:{y:-.06,x:.16}, left:{y:-.28,x:0}, right:{y:.28,x:0}, down:{y:0,x:.18}, front:{y:0,x:-.04}, nod:{y:0,x:.1}, idle:{y:0,x:0} };
   let poseT=POSES.idle, userYaw=0, dragging=false, lastX=0, speak=0, speakT=0, appear=0, appearT=0, t0=performance.now();
-  canvas.addEventListener("pointerdown",e=>{dragging=true;lastX=e.clientX;canvas.setPointerCapture(e.pointerId);});
-  canvas.addEventListener("pointermove",e=>{if(!dragging)return;userYaw+=(e.clientX-lastX)*.012;lastX=e.clientX;});
+  let dragScene=false;
+  canvas.addEventListener("pointerdown",e=>{dragging=true;dragScene=e.clientY>sceneTopPx;lastX=e.clientX;canvas.setPointerCapture(e.pointerId);});
+  canvas.addEventListener("pointermove",e=>{if(!dragging)return;const d=(e.clientX-lastX)*.012;lastX=e.clientX;if(dragScene) sceneYaw+=d; else userYaw+=d;});
   const end=()=>{dragging=false;}; canvas.addEventListener("pointerup",end); canvas.addEventListener("pointercancel",end);
 
-  const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
   function frame(now){
     requestAnimationFrame(frame);
     if(!root.visible) return;
     const t=(now-t0)/1000, dt=Math.min(.05,(now-(frame.last||now))/1000); frame.last=now;
     U.uTime.value=t;
-    // follow QR
-    anchor.x+=(target.x-anchor.x)*Math.min(1,dt*8); anchor.y+=(target.y-anchor.y)*Math.min(1,dt*8); layout();
+    layout();
     // appear: base -> beam -> figure scanned in from the bottom
     appear+=(appearT-appear)*Math.min(1,dt*(appearT?1.4:4));
     const ap=appear;
@@ -495,14 +532,15 @@ const H = (() => {
     bust.rotation.x+=(poseT.x+nodBob-bust.rotation.x)*Math.min(1,dt*2.5);
     base.rotation.z=t*.25;
     const pulse=1+speak*.06*Math.sin(t*11); base.scale.x*=pulse; base.scale.y*=pulse;
+    sceneAppearT=ap>.6?1:0; updateScene(t,dt);
     renderer.render(world,camera);
   }
   requestAnimationFrame(frame);
 
-  api.show=(p)=>{ has=true; resize(); const c=clampAnchor(p); anchor={...c}; target={...c}; root.visible=true; appear=0; appearT=1; layout(); };
-  api.hide=()=>{ root.visible=false; has=false; appearT=0; appear=0; renderer.clear(); };
-  api.setAnchor=(p)=>{ if(has) target=clampAnchor(p); };
-  api.relayout=()=>{ if(has){ target=clampAnchor(target); } };
+  api.show=()=>{ has=true; resize(); root.visible=true; sceneRoot.visible=true; appear=0; appearT=1; sceneAppear=0; sceneStep=0; layout(); };
+  api.hide=()=>{ root.visible=false; sceneRoot.visible=false; has=false; appearT=0; appear=0; renderer.clear(); };
+  api.setAnchor=()=>{};
+  api.step=(n)=>{ sceneStep=n; };
   api.pose=(g)=>{ poseT=POSES[g]||POSES.idle; };
   api.speaking=(on)=>{ speakT=on?1:0; };
   resize();
@@ -550,8 +588,8 @@ function highlight(i){
   const row=(subs.parentElement.clientHeight-32)/2;
   subs.style.transform=`translateY(${-(Math.max(i,0)*32-row)}px)`;
 }
-function resetScene(){ for(let k=1;k<=8;k++) scene.classList.remove("s"+k); }
-function applyCue(i){ const c=poem.cues[i]; for(let k=1;k<=c.s;k++) scene.classList.add("s"+k); H.pose(c.g); }
+function resetScene(){ H.step(0); }
+function applyCue(i){ const c=poem.cues[i]; H.step(c.s); H.pose(c.g); }
 function setPlayIcon(){ $("playBtn").innerHTML=playing?ICON_PAUSE:ICON_PLAY; $("playBtn").setAttribute("aria-label",playing?"Пауза":"Слушать"); }
 function playFrom(i){
   const t=++token; stopSpeech(); playing=true; setPlayIcon();
@@ -638,7 +676,7 @@ function tick(ts){
   const m=p=>({x:p.x/scale*s+offX,y:p.y/scale*s+offY});
   const L=code.location, pts=[L.topLeftCorner,L.topRightCorner,L.bottomRightCorner,L.bottomLeftCorner].map(m);
   const c={x:pts.reduce((a,p)=>a+p.x,0)/4,y:pts.reduce((a,p)=>a+p.y,0)/4};
-  if(openKey===key){ H.setAnchor(c); return; }      // tracking: hologram follows the page
+  if(openKey===key) return;
   if(openKey||key===lastHit) return;
   lastHit=key;
   $("lockPoly").setAttribute("points",pts.map(p=>p.x.toFixed(0)+","+p.y.toFixed(0)).join(" "));
